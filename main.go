@@ -7,6 +7,14 @@ import (
     "os"
 )
 
+type cliCommand struct {
+    name string
+    description string
+    callback func() error
+}
+
+var commands map[string]cliCommand
+
 func cleanInput(text string) []string {
     splits := strings.Split(text, " ")
     words := []string{}
@@ -20,18 +28,67 @@ func cleanInput(text string) []string {
     return words
 }
 
-func main() {
-    scanner := bufio.NewScanner(os.Stdin)
-    
-    for {
-        fmt.Print("Pokedex > ")
-        scanner.Scan() 
-        input :=  scanner.Text()
-        cleanInput := cleanInput(input)
-        fmt.Printf("Your command was: %s\n", cleanInput[0])
+func init() {
+    commandExit := func() error {
+        fmt.Println("Closing the Pokedex... Goodbye!")
+        os.Exit(0)
+        return nil
     }
 
-    if err := scanner.Err(); err != nil {
-        fmt.Fprintln(os.Stderr, "reading standard input:", err)
+    commandHelp := func() error {
+        fmt.Println("Welcome to the Pokedex!")
+        fmt.Println("Usage:")
+        fmt.Println()
+
+        for _, command := range commands {
+            fmt.Printf("%s: %s\n", command.name, command.description)
+        }
+
+        return nil
+    }
+
+    commands = map[string]cliCommand{
+        "exit": {
+            name: "exit",
+            description: "Exit the Pokedex",
+            callback: commandExit,
+        },
+        "help": {
+            name: "help",
+            description: "Print Pokedex help",
+            callback: commandHelp,
+        },
+    }
+}
+
+func main() {
+    scanner := bufio.NewScanner(os.Stdin)
+
+    for {
+        fmt.Print("Pokedex > ")
+        if !scanner.Scan() {
+            if err := scanner.Err(); err != nil {
+                fmt.Fprintln(os.Stderr, "reading standard input:", err)
+            }
+            break
+        }
+
+        inputWords := cleanInput(scanner.Text())
+        if len(inputWords) == 0 {
+            fmt.Println("Please enter command...")
+            continue
+        }
+
+        input := inputWords[0]
+        cmd, exists := commands[input]
+        if !exists {
+            fmt.Printf("Unknown command: %s\n", input)
+            continue
+        }
+
+        if err := cmd.callback(); err != nil {
+            fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+            os.Exit(1)
+        }
     }
 }
