@@ -5,12 +5,20 @@ import (
     "strings"
     "bufio"
     "os"
+    "io"
+    "net/http"
+    "encoding/json"
 )
 
+type Config struct {
+    Next     string
+    Previous string
+}
+
 type cliCommand struct {
-    name string
+    name        string
     description string
-    callback func() error
+    callback    func(c *Config) error
 }
 
 var commands map[string]cliCommand
@@ -28,14 +36,100 @@ func cleanInput(text string) []string {
     return words
 }
 
+type LocationArea struct {
+    Name string `json:"name"`
+    URL  string `json:"url"`
+}
+
+type LocationAreas struct {
+    Count    int            `json:"count"`
+    Next     *string        `json:"next"`
+    Previous *string        `json:"previous"`
+    Results  []LocationArea `json:"results"`
+}
+
 func init() {
-    commandExit := func() error {
+    commandMap := func(c *Config) error {
+        if c.Next == "" {
+            fmt.Println("you're on the first page")
+        }
+
+        res, err := http.Get(c.Next)
+        if err != nil {
+            fmt.Printf("Failed to GET %s [Error: %v]\n", c.Next, err)
+            return nil
+        }
+        defer res.Body.Close()
+
+        body, err := io.ReadAll(res.Body)
+        if err != nil {
+            fmt.Printf("Error reading response body: %v\n", err)
+            return nil
+        }
+
+        var locationAreas LocationAreas
+        if err := json.Unmarshal(body, &locationAreas); err != nil {
+            fmt.Println("Error parsing JSON: ", err)
+            return nil
+        }
+
+        results := locationAreas.Results
+        for _, result := range results {
+            fmt.Println(result.Name)
+        }
+
+        c.Previous = c.Next
+        c.Next = *locationAreas.Next
+
+        return nil
+    }
+
+    commandMapb := func(c *Config) error {
+        if c.Previous == "" {
+            fmt.Println("you're on the first page")
+        }
+
+        res, err := http.Get(c.Previous)
+        if err != nil {
+            fmt.Printf("Failed to GET %s [Error: %v]\n", c.Next, err)
+            return nil
+        }
+        defer res.Body.Close()
+
+        body, err := io.ReadAll(res.Body)
+        if err != nil {
+            fmt.Printf("Error reading response body: %v\n", err)
+            return nil
+        }
+
+        var locationAreas LocationAreas
+        if err := json.Unmarshal(body, &locationAreas); err != nil {
+            fmt.Println("Error parsing JSON: ", err)
+            return nil
+        }
+
+        results := locationAreas.Results
+        for _, result := range results {
+            fmt.Println(result.Name)
+        }
+
+        if locationAreas.Previous != nil {
+            c.Previous = *locationAreas.Previous
+        } else {
+            c.Previous = ""
+        }
+        c.Next = *locationAreas.Next
+
+        return nil
+    }
+
+    commandExit := func(c *Config) error {
         fmt.Println("Closing the Pokedex... Goodbye!")
         os.Exit(0)
         return nil
     }
 
-    commandHelp := func() error {
+    commandHelp := func(c *Config) error {
         fmt.Println("Welcome to the Pokedex!")
         fmt.Println("Usage:")
         fmt.Println()
@@ -48,6 +142,16 @@ func init() {
     }
 
     commands = map[string]cliCommand{
+        "map": {
+            name: "map",
+            description: "Page forward through locations",
+            callback: commandMap,
+        },
+        "mapb": {
+            name: "mapb",
+            description: "Page backward through locations",
+            callback: commandMapb,
+        },
         "exit": {
             name: "exit",
             description: "Exit the Pokedex",
@@ -62,6 +166,11 @@ func init() {
 }
 
 func main() {
+    // https://pokeapi.co/api/v2/location/{id or name}/
+    config := &Config{
+        Next: "https://pokeapi.co/api/v2/location-area/",
+    }
+
     scanner := bufio.NewScanner(os.Stdin)
 
     for {
@@ -86,7 +195,7 @@ func main() {
             continue
         }
 
-        if err := cmd.callback(); err != nil {
+        if err := cmd.callback(config); err != nil {
             fmt.Fprintf(os.Stderr, "Error: %v\n", err)
             os.Exit(1)
         }
