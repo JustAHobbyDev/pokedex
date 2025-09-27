@@ -8,6 +8,7 @@ import (
     "io"
     "net/http"
     "encoding/json"
+    "github.com/JustAHobbyDev/pokedex/internal/pokecache"
 )
 
 type Config struct {
@@ -48,13 +49,40 @@ type LocationAreas struct {
     Results  []LocationArea `json:"results"`
 }
 
+var cache pokecache.Cache;
+
+func fetchOrGet(url string) ([]byte, error) {
+    cachedRes, ok := cache.Get(url)
+    if ok {
+        return cachedRes, nil
+    }
+
+    res, err := http.Get(url)
+    if err != nil {
+        return nil, fmt.Errorf("Failed to GET %s [Error: %v]\n", url, err)
+    }
+    defer res.Body.Close()
+
+    body, err := io.ReadAll(res.Body)
+    if err != nil {
+        return nil, fmt.Errorf("Error reading response body: %v\n", err)
+    }
+
+    cache.Add(url, body)
+
+    return body, nil
+}
+
 func init() {
+    cache := pokecache.NewCache(5)
+
     commandMap := func(c *Config) error {
         if c.Next == "" {
             fmt.Println("you're on the first page")
         }
 
-        res, err := http.Get(c.Next)
+        res, err := fetchOrGete(c.Next)
+
         if err != nil {
             fmt.Printf("Failed to GET %s [Error: %v]\n", c.Next, err)
             return nil
@@ -89,7 +117,7 @@ func init() {
             fmt.Println("you're on the first page")
         }
 
-        res, err := http.Get(c.Previous)
+        res, err := fetchOrGet(c.Previous)
         if err != nil {
             fmt.Printf("Failed to GET %s [Error: %v]\n", c.Next, err)
             return nil
@@ -166,6 +194,8 @@ func init() {
 }
 
 func main() {
+    cache.reapLoop()
+
     // https://pokeapi.co/api/v2/location/{id or name}/
     config := &Config{
         Next: "https://pokeapi.co/api/v2/location-area/",
