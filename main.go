@@ -74,29 +74,22 @@ func fetchOrGet(url string) ([]byte, error) {
 }
 
 func init() {
-    cache := pokecache.NewCache(5)
+    cache = pokecache.NewCache(5)
 
     commandMap := func(c *Config) error {
         if c.Next == "" {
             fmt.Println("you're on the first page")
         }
 
-        res, err := fetchOrGete(c.Next)
+        data, err := fetchOrGet(c.Next)
 
         if err != nil {
-            fmt.Printf("Failed to GET %s [Error: %v]\n", c.Next, err)
-            return nil
-        }
-        defer res.Body.Close()
-
-        body, err := io.ReadAll(res.Body)
-        if err != nil {
-            fmt.Printf("Error reading response body: %v\n", err)
+            fmt.Println(err)
             return nil
         }
 
         var locationAreas LocationAreas
-        if err := json.Unmarshal(body, &locationAreas); err != nil {
+        if err := json.Unmarshal(data, &locationAreas); err != nil {
             fmt.Println("Error parsing JSON: ", err)
             return nil
         }
@@ -115,23 +108,17 @@ func init() {
     commandMapb := func(c *Config) error {
         if c.Previous == "" {
             fmt.Println("you're on the first page")
+            c.Previous = c.Next
         }
 
-        res, err := fetchOrGet(c.Previous)
+        data, err := fetchOrGet(c.Previous)
         if err != nil {
-            fmt.Printf("Failed to GET %s [Error: %v]\n", c.Next, err)
-            return nil
-        }
-        defer res.Body.Close()
-
-        body, err := io.ReadAll(res.Body)
-        if err != nil {
-            fmt.Printf("Error reading response body: %v\n", err)
+            fmt.Println(err)
             return nil
         }
 
         var locationAreas LocationAreas
-        if err := json.Unmarshal(body, &locationAreas); err != nil {
+        if err := json.Unmarshal(data, &locationAreas); err != nil {
             fmt.Println("Error parsing JSON: ", err)
             return nil
         }
@@ -194,7 +181,7 @@ func init() {
 }
 
 func main() {
-    cache.reapLoop()
+    cache.ReapLoop()
 
     // https://pokeapi.co/api/v2/location/{id or name}/
     config := &Config{

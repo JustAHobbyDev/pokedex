@@ -37,14 +37,14 @@ func (c *Cache) Get(key string) ([]byte, bool) {
     entry, ok := c.Entries[key]
     c.mutex.Unlock()
 
-    if ok {
+    if !ok {
         return []byte{}, false
     }
 
     return entry.val, true
 }
 
-func (c *Cache) reapLoop() {
+func (c *Cache) ReapLoop() {
 	ticker := time.NewTicker(c.interval * time.Second)
 	defer ticker.Stop()
 
